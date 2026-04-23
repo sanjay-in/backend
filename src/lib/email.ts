@@ -28,9 +28,9 @@ function createTransporter() {
   });
 }
 
-export async function sendWelcomeEmail(to: string, name: string): Promise<void> {
-  const defaultFrom = process.env.EMAIL_USER || 'no-reply@eduledger.local';
-  const from = process.env.EMAIL_FROM || defaultFrom;
+export async function sendVerificationEmail(to: string, name: string): Promise<void> {
+  const defaultFrom = Bun.env.EMAIL_USER || 'no-reply@eduledger.local';
+  const from = Bun.env.EMAIL_FROM || defaultFrom;
   const transporter = createTransporter();
 
   const subject = `Welcome to EduLedger, ${name}!`;
