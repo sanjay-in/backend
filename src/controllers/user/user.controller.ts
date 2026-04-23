@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from "jsonwebtoken";
 import { createAuthToken } from "../../lib/auth";
 import { MongoClient } from "mongodb";
+import { getDB } from "../../lib/mongo";
 
 export async function registerUser(c: Context, next: Next) {
   const { 
@@ -11,12 +12,11 @@ export async function registerUser(c: Context, next: Next) {
     university, 
     nationality,
     bio,
-    password, 
-    confirmPassword,
-  } = await c.req.json()
+    password
+  } = await c.req.json();
 
-  // Simple validation (ensure email and password are provided)
-  if (!email || !password || !university || !nationality || !password || !confirmPassword || !name) {
+  // Simple validation (ensure fields are present)
+  if (!email || !password || !university || !nationality || !password || !name) {
     return c.json({ error: 'Fields are missing' }, 400)
   }
 
@@ -26,72 +26,75 @@ export async function registerUser(c: Context, next: Next) {
     email,
     password: hashedPassword,
     name,
-    nationality,
-    university,
-    emailVerified: false,
+    isEmailVerified: false,
+    bio,
     createdAt: Date.now(),
+    isActive: 1,
   };
 
-const client = new MongoClient(Bun.env.MONGODB_URI!);
+  // Connection to Database
+  const db = await getDB();
+  const usersCollection = db.collection('users');
 
   try {
-    const userCollection = client.db(Bun.env.DB_NAME).collection(Bun.env.USERS_COLLECTION!);
-    const existingUser = await userCollection.findOne({ email });
+    const existingUser = await usersCollection.findOne({ email });
 
     if (existingUser) {
       return c.json({ error: 'Email already in use' }, 400);
     }
 
-    const result = await userCollection.insertOne(newUser);
+    const result = await usersCollection.insertOne(newUser);
 
+    // Creates JWT token with expiry
+    const token = jwt.sign(
+      { userId: result.insertedId, email },
+      Bun.env.JWT_SECRET!,
+      { expiresIn: '1h' }
+    );
 
-    return c.json({ message: 'Registration successful! Please check your email for verification.' }, 201);
+    const emailVerificationCollection = db.collection('email_verification_tokens'); 
+    
+    const emailVerificationToken = {
+      token,
+      objectId: result.insertedId,
+      expiresAt: ,
+      createdAt: Date.now() 
+    }
+
+    const emailResponse = await emailVerificationCollection.insertOne(emailVerificationToken);
+
+    // Send mail
+
+    return c.json({ message: 'Registration successful! Please check your email for verification.', token }, 200);
   } catch (error) {
     console.error('Error inserting user into MongoDB:', error);
     return c.json({ error: 'An error occurred while registering the user.' }, 500);
   }
-
-  // Check if user already exists
- //   const userExists = users.find(user => user.email === email)
- //   if (userExists) {
-//     return c.json({ error: 'User already exists' }, 400)
-//   }
-
-  // Hash the password
-//   const hashedPassword = await bcrypt.hash(password, 10)
-
-  // Store the new user (In real applications, store this in a database)
-  // users.push({ email, password: hashedPassword })
-
-  // Generate JWT token for the new user
-//   const token = createAuthToken(email)
-
-  // Respond with the JWT token
-  return c.json({ message: 'User registered successfully', token })
 
 }
 
 export async function login(c: Context, next: Next) {
   const { email, password } = await c.req.json();
 
-  const userCollection = client.db(DB_NAME).collection(USERS_COLLECTION);
-  const user = await userCollection.findOne({ email });
+  const db = await getDB();
+  const usersCollection = db.collection('users');
+  const user = await usersCollection.findOne({ email });
 
   if (!user) {
     return c.json({ error: 'Invalid credentials or email not verified.' }, 400);
   }
 
-  const hashedPassword = await bcrypt.hash(password, 12);
-
-  const validPassword = await bcrypt.compare(hashedPassword, user.password);
+  const validPassword = await bcrypt.compare(password, user.password);
   if (!validPassword) {
     return c.json({ error: 'Invalid credentials.' }, 400);
   }
 
-  const accessToken = jwt.sign({ userId: user._id }, Bun.env.JWT_SECRET!, { expiresIn: Bun.env.JWT_EXPIRATION });
-  const refreshToken = jwt.sign({ userId: user._id }, Bun.env.JWT_SECRET!, { expiresIn: Bun.env.JWT_REFRESH_EXPIRATION });
+  return c.json({ message: 'Login Success' }, 200);
 
-  return c.json({ accessToken, refreshToken });
+  // const accessToken = jwt.sign({ userId: user._id }, Bun.env.JWT_SECRET!, { expiresIn: Bun.env.JWT_EXPIRATION });
+  // const refreshToken = jwt.sign({ userId: user._id }, Bun.env.JWT_SECRET!, { expiresIn: Bun.env.JWT_REFRESH_EXPIRATION });
+
+  // return c.json({ accessToken, refreshToken });
 }
 
 export async function refreshToken(c: Context, next: Next) {
@@ -110,3 +113,7 @@ export async function refreshToken(c: Context, next: Next) {
     return c.json({ error: 'Invalid or expired refresh token' }, 400);
   }
 }; 
+
+export async function verifyUser(c: Context, next: Next) {
+
+}
