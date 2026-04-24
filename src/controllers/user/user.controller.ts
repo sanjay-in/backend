@@ -1,76 +1,81 @@
 import { Context, Next } from "hono";
+import mongoose from "mongoose";
 import bcrypt from 'bcrypt';
 import jwt from "jsonwebtoken";
-import { createAuthToken } from "../../lib/auth";
-import { MongoClient } from "mongodb";
 import { getDB } from "../../lib/mongo";
+import { sendVerificationEmail } from "../../lib/email";
+import { CreateUser } from "../../types/user/user.types";
+import User from "../../models/User.model";
 
+/**
+  * @description To register a new user and send email verification
+  * @param c Context
+  * @param next Next
+*/
 export async function registerUser(c: Context, next: Next) {
-  const { 
-    name, 
-    email, 
-    university, 
-    nationality,
+  const {
+    name,
+    email,
     bio,
     password
   } = await c.req.json();
 
   // Simple validation (ensure fields are present)
-  if (!email || !password || !university || !nationality || !password || !name) {
+  if (!email || !password || !password || !name) {
     return c.json({ error: 'Fields are missing' }, 400)
   }
 
   const hashedPassword = await bcrypt.hash(password, 12);
 
-  const newUser = {
+  const newUser: CreateUser = new User({
     email,
     password: hashedPassword,
     name,
-    isEmailVerified: false,
     bio,
-    createdAt: Date.now(),
-    isActive: 1,
-  };
+    isVerified: false,
+    isActive: true,
+    createdAt: new Date(),
+  });
 
-  // Connection to Database
-  const db = await getDB();
-  const usersCollection = db.collection('users');
+
+  // Starts session for database to make transaction if success
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
-    const existingUser = await usersCollection.findOne({ email });
+    // Checks if user already exists
+    const existingUser = await User.findOne({ email });
 
     if (existingUser) {
       return c.json({ error: 'Email already in use' }, 400);
     }
 
-    const result = await usersCollection.insertOne(newUser);
+    const result = await User.insertOne(newUser);
 
     // Creates JWT token with expiry
     const token = jwt.sign(
-      { userId: result.insertedId, email },
+      { userId: result._id, email },
       Bun.env.JWT_SECRET!,
       { expiresIn: '1h' }
     );
 
-    const emailVerificationCollection = db.collection('email_verification_tokens'); 
-    
-    const emailVerificationToken = {
-      token,
-      objectId: result.insertedId,
-      expiresAt: ,
-      createdAt: Date.now() 
-    }
+    // Send verification email
+    await sendVerificationEmail(email, name, result._id.toString());
 
-    const emailResponse = await emailVerificationCollection.insertOne(emailVerificationToken);
-
-    // Send mail
-
+    // Commits the entry of registered user to the database
+    await session.commitTransaction();
     return c.json({ message: 'Registration successful! Please check your email for verification.', token }, 200);
+
   } catch (error) {
+    // aborts session if error
+    await session.abortTransaction();
     console.error('Error inserting user into MongoDB:', error);
     return c.json({ error: 'An error occurred while registering the user.' }, 500);
+    next();
+  } finally {
+    // ends session and registers the user
+    session.endSession();
   }
-
 }
 
 export async function login(c: Context, next: Next) {
@@ -112,8 +117,19 @@ export async function refreshToken(c: Context, next: Next) {
   } catch (error) {
     return c.json({ error: 'Invalid or expired refresh token' }, 400);
   }
-}; 
+};
 
 export async function verifyUser(c: Context, next: Next) {
+  const url = new URL(c.req.url);
+  const token = url.searchParams.get("_id")?.toString();
+      try {
+        const { email } = jwt.verify(token!, Bun.env.JWT_SECRET!);
+        const user = user.find(u => u.email === email);
+        if (!user) throw new Error("User not found");
 
+        user.verified = true;
+        return new Response("Email verified successfully", { status: 200 });
+      } catch (err) {
+        return new Response("Invalid or expired token", { status: 400 });
+      }
 }
