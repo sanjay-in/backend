@@ -1,26 +1,34 @@
-// db.ts
-import { MongoClient, Db } from 'mongodb';
+import mongoose from "mongoose";
 
-let client: MongoClient;
-let db: Db;
+let isConnected = false;
 
-export async function connectDB(uri: string, dbName: string): Promise<Db> {
-  if (db) return db; // Return existing connection if already connected
-
-  if (!client) {
-    client = new MongoClient(uri);
+/**
+ * Connect to MongoDB using Mongoose
+ * @param uri MongoDB connection string
+ */
+export async function connectDB(uri: string): Promise<typeof mongoose> {
+  if (isConnected) {
+    console.log("Already connected to MongoDB");
+    return mongoose;
   }
 
-  await client.connect();
-
-  db = client.db(dbName);
-  console.log('Connected to MongoDB');
-  return db;
+  try {
+    await mongoose.connect(uri); // no options needed in Mongoose 7+
+    isConnected = true;
+    console.log("Connected to MongoDB via Mongoose");
+    return mongoose;
+  } catch (err) {
+    console.error("MongoDB connection error:", err);
+    process.exit(1);
+  }
 }
 
-export async function getDB(): Promise<Db> {
-  if (!db) {
-    throw new Error('Database not connected. Call connectDB first.');
+/**
+ * Get the mongoose connection
+ */
+export function getDB(): mongoose.Connection {
+  if (!isConnected) {
+    throw new Error("Database not connected. Call connectDB first.");
   }
-  return db;
+  return mongoose.connection;
 }
