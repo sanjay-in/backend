@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 import bcrypt from 'bcrypt';
 import jwt from "jsonwebtoken";
 import { getDB } from "../../lib/mongo";
-import { sendVerificationEmail } from "../../lib/email";
 import { CreateUser } from "../../types/user/user.types";
 import User from "../../models/User.model";
 
@@ -58,9 +57,6 @@ export async function registerUser(c: Context, next: Next) {
       Bun.env.JWT_SECRET!,
       { expiresIn: '1h' }
     );
-
-    // Send verification email
-    await sendVerificationEmail(email, name, result._id.toString());
 
     // Commits the entry of registered user to the database
     await session.commitTransaction();
