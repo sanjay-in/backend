@@ -3,8 +3,10 @@ import mongoose from "mongoose";
 import bcrypt from 'bcrypt';
 import jwt from "jsonwebtoken";
 import { getDB } from "../../lib/mongo";
+import { sendVerificationEmail } from "../../lib/email";
 import { CreateUser } from "../../types/user/user.types";
 import User from "../../models/User.model";
+import EmailVerify from "../../models/Email.model";
 
 /**
   * @description To register a new user and send email verification
@@ -77,9 +79,7 @@ export async function registerUser(c: Context, next: Next) {
 export async function login(c: Context, next: Next) {
   const { email, password } = await c.req.json();
 
-  const db = await getDB();
-  const usersCollection = db.collection('users');
-  const user = await usersCollection.findOne({ email });
+  const user = await User.findOne({ email });
 
   if (!user) {
     return c.json({ error: 'Invalid credentials or email not verified.' }, 400);
@@ -115,17 +115,59 @@ export async function refreshToken(c: Context, next: Next) {
   }
 };
 
+/**
+  * @description Verifies the user by comparing the URL with the hashed token in the database
+  * @param c Context
+  * @param next Next
+*/
 export async function verifyUser(c: Context, next: Next) {
   const url = new URL(c.req.url);
-  const token = url.searchParams.get("_id")?.toString();
-      try {
-        const { email } = jwt.verify(token!, Bun.env.JWT_SECRET!);
-        const user = user.find(u => u.email === email);
-        if (!user) throw new Error("User not found");
+  const token = url.searchParams.get("token");
 
-        user.verified = true;
-        return new Response("Email verified successfully", { status: 200 });
-      } catch (err) {
-        return new Response("Invalid or expired token", { status: 400 });
-      }
+  if (!token) {
+    return c.json({ error: 'Verification token is missing' }, 400);
+  }
+
+  try {
+    // Find the token in the email verification collection
+    const emailVerification = await EmailVerify.findOne({ token });
+
+    // Check if the token is found and has expired
+    if (!emailVerification) {
+      return c.json({ error: 'Invalid or expired verification token' }, 400);
+    }
+
+    if (Number(emailVerification.expiresAt) < Date.now()) {
+      return c.json({ error: 'Verification token has expired' }, 400);
+    }
+
+    // Find the user associated with the token
+    const user = await User.findOne({ email: emailVerification.email });
+
+    if (!user) {
+      return c.json({ error: 'User not found' }, 404);
+    }
+
+    // If the user is already verified, return a message
+    if (user.isVerified) {
+      return c.json({ message: 'User is already verified' }, 200);
+    }
+
+    // Compare the token with the hashed value in the database
+    const isValidToken = await bcrypt.compare(token, emailVerification.token);
+
+    if (!isValidToken) {
+      return c.json({ error: 'Invalid verification token' }, 400);
+    }
+
+    // Update the user verification status
+    user.isVerified = true;
+    await user.save();
+
+    // Return a success response
+    return c.json({ message: 'Email verified successfully' }, 200);
+  } catch (err) {
+    console.error('Error verifying email:', err);
+    return c.json({ error: 'Something went wrong while verifying the email' }, 500);
+  }
 }

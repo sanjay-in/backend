@@ -52,9 +52,8 @@ export async function sendVerificationEmail(to: string, name: string, id: string
 
   // A random string is generated and combined with ID
   const generatedUUID = crypto.randomUUID() + '-' + id;
-  const verificationURL = `${serverUrl}/verify/${generatedUUID}`;
-
   const hashedToken = await bcrypt.hash(generatedUUID, 12);
+  const verificationURL = `${serverUrl}/verify?token=${hashedToken}`;
 
   // the email id along with the hashed token is stored in email_verification_token collection
   const emailVerification: CreateEmailVerification = new EmailVerify({
