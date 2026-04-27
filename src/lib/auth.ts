@@ -1,27 +1,26 @@
-import jwt from "jsonwebtoken";
+import { Context } from "hono";
+import User from "../models/User.model";
 
-interface User {
-  _id: string | number;
-  email: string;
-  fullName: string;
-}
+export async function verifyEmail(c: Context) {
+  const body = await c.req.json();
 
-// ExpiresIn 7 days => 604800 secs
-export function createAuthToken(user: User, expiresIn: number = 604800): string {
-  const payload = {
-    sub: user._id?.toString ? user._id.toString() : user._id,
-    email: user.email,
-    fullName: user.fullName,
-    iat: Math.floor(Date.now() / 1000),
+  const user = body.record;
+
+  if (!user?.id) {
+    return c.json({ error: 'Invalid payload' }, 400);
   }
 
-  return jwt.sign(payload, Bun.env.JWT_SECRET!, {expiresIn});
-}
+  await User.updateOne(
+    { email: user.email },
+    {
+      $set: {
+        isVerified: !!user.email_confirmed_at,
+        verifiedAt: new Date()
+      }
+    },
+    { upsert: true
+    }
+  );
 
-function verifyAuthToken(token: string) {
-  try {
-    return jwt.verify(token, Bun.env.JWT_SECRET!);
-  } catch {
-    return null;
-  }
+  return c.json({ received: true });
 }
