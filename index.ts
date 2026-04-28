@@ -15,7 +15,11 @@ app.route("/api/user", userRouter);
 
 app.get('/', (c) => c.text('Hello Bun!'))
 
-await connectDB(Bun.env.MONGODB_URI!);
+async function connectDatabase() {
+  await connectDB(Bun.env.MONGODB_URI!);
+}
+
+connectDatabase();
 
 export default {
   port: Bun.env.PORT ?? 5000,
