@@ -98,23 +98,6 @@ export async function login(c: Context, next: Next) {
   // return c.json({ accessToken, refreshToken });
 }
 
-export async function refreshToken(c: Context, next: Next) {
-  const { refreshToken } = await c.req.json();
-
-  if (!refreshToken) {
-    return c.json({ error: 'Refresh token is required' }, 400);
-  }
-
-  try {
-    const decoded: any = jwt.verify(refreshToken, Bun.env.JWT_SECRET!);
-    const newAccessToken = jwt.sign({ userId: decoded.userId }, Bun.env.JWT_SECRET!, { expiresIn: Bun.env.JWT_EXPIRATION });
-
-    return c.json({ accessToken: newAccessToken });
-  } catch (error) {
-    return c.json({ error: 'Invalid or expired refresh token' }, 400);
-  }
-};
-
 /**
   * @description Verifies the user by comparing the URL with the hashed token in the database
   * @param c Context
