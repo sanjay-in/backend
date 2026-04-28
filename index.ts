@@ -15,9 +15,7 @@ app.route("/api/user", userRouter);
 
 app.get('/', (c) => c.text('Hello Bun!'))
 
-console.log(Bun.env.MONGODB_URI)
-console.log(Bun.env.MONGO_DB)
-await connectDB(Bun.env.MONGODB_URI!, Bun.env.MONGO_DB!);
+await connectDB(Bun.env.MONGODB_URI!);
 
 export default {
   port: Bun.env.PORT ?? 5000,
