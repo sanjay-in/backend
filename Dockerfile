@@ -1,17 +1,15 @@
-# Use official Bun image
-FROM jarredsumner/bun:latest
+# docker-compose.yml
+version: '3.4'
 
-# Set working directory
-WORKDIR /app
-
-# Copy all files
-COPY . .
-
-# Install dependencies
-RUN bun install
-
-# Expose port (for local dev; Vercel ignores it)
-EXPOSE 5000
-
-# Start Hono app
-CMD ["bun", "run", "index.ts"]
+services:
+  weaviate:
+    image: semitechnologies/weaviate:latest
+    ports:
+      - "8080:8080"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 20
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'none'
+      ENABLE_MODULES: ''
+      CLUSTER_HOSTNAME: 'node1'
